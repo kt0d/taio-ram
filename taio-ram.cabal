@@ -1,0 +1,24 @@
+cabal-version:       >=1.10
+
+name:                taio-ram
+version:             0.1.0.0
+synopsis:            Simulation of a particular RAM machine model
+-- description:
+-- bug-reports:
+-- license:
+author:              kmltdr
+maintainer:          kmltdr@mail.ru
+-- copyright:
+-- category:
+build-type:          Simple
+
+executable taio-ram
+  main-is:             Main.hs
+  -- other-modules:
+  -- other-extensions:
+  build-depends:
+    base                >=4.13 && <4.14,
+    containers          >=0.6.3.1,
+    mtl                 >=2
+  -- hs-source-dirs:
+  default-language:    Haskell2010
