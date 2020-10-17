@@ -8,15 +8,16 @@ import Text.ParserCombinators.ReadP
 type Symbol = Char
 type Register = [Symbol]
 type Addr = [Symbol]
+data AddrOperand = Direct Addr | Indirect Addr deriving (Show)
 type Memory = Map Addr Register
 type Label = String
 data Instruction =
-        Add Symbol Addr
-    |   Del Addr
-    |   Clr Addr
-    |   Cpy Addr Addr
+        Add Symbol AddrOperand
+    |   Del AddrOperand
+    |   Clr AddrOperand
+    |   Cpy AddrOperand AddrOperand
     |   Jmp Label
-    |   JmpIf Symbol Addr Label
+    |   JmpIf Symbol AddrOperand Label
     deriving (Show)
 data Statement = L Label | Instr Instruction deriving (Show)
 type Source = [Statement]
@@ -62,13 +63,15 @@ execJmpIf s (x:_) l m
     | otherwise = nextInstr m
 execJmpIf _ _ _ m = nextInstr m
 
-loadRegister :: Memory -> Addr -> Register
-loadRegister mem a = M.findWithDefault [] a mem
+loadRegister :: Memory -> AddrOperand -> Register
+loadRegister mem (Direct a) = M.findWithDefault [] a mem
+loadRegister mem (Indirect a) = loadRegister mem $ Direct $ M.findWithDefault [] a mem
 
 runMachine :: Memory -> Machine -> Memory
 runMachine mem m@(Machine (x:_) _) = runMachine newMem newMachine
     where 
-        alter a f = M.alter f a mem
+        alter (Direct a) f = M.alter f a mem
+        alter (Indirect a) f = M.alter f (loadRegister mem $ Direct a) mem
         newMem = case x of
             Add s a -> alter a $ execAdd s
             Del a -> alter a $ execDel
@@ -84,33 +87,46 @@ runMachine mem (Machine [] _) = mem
 parseAddr :: ReadP Addr
 parseAddr = munch1 isAlphaNum
 
+parseDirAddr :: ReadP AddrOperand
+parseDirAddr = Direct <$> parseAddr
+
+parseIndirAddr :: ReadP AddrOperand
+parseIndirAddr = do
+    char '('
+    a <- parseAddr
+    char ')'
+    return $ Indirect a
+
+parseAddrOp :: ReadP AddrOperand
+parseAddrOp = parseDirAddr <++ parseIndirAddr
+
 parseAdd :: ReadP Instruction
 parseAdd = do
     string "add"
     skipSpaces
     s <- get
     skipSpaces
-    Add s <$> parseAddr
+    Add s <$> parseAddrOp
 
 parseDel :: ReadP Instruction
 parseDel = do
     string "del"
     skipSpaces
-    Del <$> parseAddr
+    Del <$> parseAddrOp
 
 parseClr :: ReadP Instruction
 parseClr = do
     string "clr"
     skipSpaces
-    Clr <$> parseAddr
+    Clr <$> parseAddrOp
 
 parseCpy :: ReadP Instruction
 parseCpy = do
     string "cpy"
     skipSpaces
-    dst <- parseAddr
+    dst <- parseAddrOp
     skipSpaces
-    Cpy dst <$> parseAddr
+    Cpy dst <$> parseAddrOp
 
 parseLabel :: ReadP Label
 parseLabel = munch1 isAlphaNum
@@ -133,7 +149,7 @@ parseJmpIf = do
     skipSpaces
     s <- get
     skipSpaces
-    a <- parseAddr
+    a <- parseAddrOp
     skipSpaces
     l <- parseLabel
     return $ JmpIf s a l
