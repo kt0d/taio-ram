@@ -1,6 +1,9 @@
 module Main where
 import Data.Map.Strict (Map)
 import qualified Data.Map.Strict as M
+import Control.Monad
+import Data.Char
+import Text.ParserCombinators.ReadP
 
 type Symbol = Char
 type Register = [Symbol]
@@ -14,7 +17,8 @@ data Instruction =
     |   Cpy Addr Addr
     |   Jmp Label
     |   JmpIf Symbol Addr Label
-data Statement = L Label | Instr Instruction
+    deriving (Show)
+data Statement = L Label | Instr Instruction deriving (Show)
 type Source = [Statement]
 type Program = [Instruction]
 type JumpMap = Map Label Program
@@ -29,7 +33,7 @@ addJumps (L l) (Machine p j) = Machine p (M.insert l p j)
 type MemoryInstr = Maybe Register -> Maybe Register
 
 execAdd :: Symbol -> MemoryInstr
-execAdd s (Just l) = Just (s:l)
+execAdd s (Just l) = Just $ l ++ [s]
 execAdd s _ = Just [s]
 
 execDel :: MemoryInstr
@@ -48,7 +52,9 @@ nextInstr :: ControlInstr
 nextInstr (Machine (_:xs) j) = Machine xs j
 
 execJmp :: Label -> ControlInstr
-execJmp l (Machine _ j) = Machine (j M.! l) j
+execJmp l (Machine _ j) = case M.lookup l j of 
+    Just p -> Machine p j
+    Nothing -> errorWithoutStackTrace $ "Unknown label: " ++ l
 
 execJmpIf :: Symbol -> Register -> Label -> ControlInstr
 execJmpIf s (x:_) l m
@@ -75,15 +81,85 @@ runMachine mem m@(Machine (x:_) _) = runMachine newMem newMachine
             _ -> nextInstr m
 runMachine mem (Machine [] _) = mem
 
+parseAddr :: ReadP Addr
+parseAddr = munch1 isAlphaNum
+
+parseAdd :: ReadP Instruction
+parseAdd = do
+    string "add"
+    skipSpaces
+    s <- get
+    skipSpaces
+    Add s <$> parseAddr
+
+parseDel :: ReadP Instruction
+parseDel = do
+    string "del"
+    skipSpaces
+    Del <$> parseAddr
+
+parseClr :: ReadP Instruction
+parseClr = do
+    string "clr"
+    skipSpaces
+    Clr <$> parseAddr
+
+parseCpy :: ReadP Instruction
+parseCpy = do
+    string "cpy"
+    skipSpaces
+    dst <- parseAddr
+    skipSpaces
+    Cpy dst <$> parseAddr
+
+parseLabel :: ReadP Label
+parseLabel = munch1 isAlphaNum
+
+parseLabelStmnt :: ReadP Statement
+parseLabelStmnt = do
+    l <- parseLabel
+    char ':'
+    return $ L l
+
+parseJmp :: ReadP Instruction
+parseJmp = do
+    string "jmp"
+    skipSpaces
+    Jmp <$> parseLabel
+
+parseJmpIf :: ReadP Instruction
+parseJmpIf = do
+    string "jmpif"
+    skipSpaces
+    s <- get
+    skipSpaces
+    a <- parseAddr
+    skipSpaces
+    l <- parseLabel
+    return $ JmpIf s a l
+
+parseStmnt :: ReadP Statement
+parseStmnt = choice $ parseLabelStmnt:(map (Instr <$>) [parseAdd, parseDel, parseClr, parseCpy, parseJmp, parseJmpIf])
+
+parseSource :: ReadP Source
+parseSource = do
+    skipSpaces
+    src <- sepBy1 parseStmnt skipSpaces
+    skipSpaces
+    eof
+    return src
+
 main :: IO ()
 main = do
-    let src = [
-                Instr (Add 'x' "0")
-            ,   Instr (Add 'y' "0")
-            ,   Instr (Cpy "1" "0")
-            ,   Instr (JmpIf 'y' "1" "test")
-            ,   Instr (Add 'z' "3")
-            ,   L "test"]
+    input <- getContents
+    let parsed = readP_to_S parseSource input
+    case parsed of
+        [] -> errorWithoutStackTrace "Could not parse source"
+        _:_:_ -> errorWithoutStackTrace "Ambigous parse"
+        (_,str@(_:_)):_ -> errorWithoutStackTrace $ "Could not parse whole source, stopped at: " ++ str
+        _ -> return ()
+    let src = fst $ head parsed
     let machine = mkMachine src
     let mem = runMachine M.empty machine
-    print mem
+    forM_ (M.toAscList mem) $
+        \(r,v) -> putStrLn $ "[" ++ r ++ "]: " ++ v
