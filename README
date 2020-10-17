@@ -1,0 +1,16 @@
+Simulation of a particular RAM machine model with indirect addressing.
+
+There are 6 available instructions:
+add s reg       - append symbol s to register reg
+del reg         - delete first symbol from register reg
+clr reg         - remove all symbols from register reg
+cpy dst src     - copy all symbols from register src to register dst
+jmp l           - jump to label lab
+jmpif s reg l   - jump to label lab if the first symbol of register reg is s
+
+Any alphanumeric string that appeared in program followed by colon is valid label.
+
+Direct addressing: any alphanumeric string, e.g. `wer32r2r`
+Indirect addressing: any address in parentheses, e.g. `(wer32r2r)`
+
+Source is read from stdin.

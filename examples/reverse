@@ -1,0 +1,37 @@
+add 0 r
+add 0 r
+add 1 r
+add 1 r
+add 0 r
+add 1 r
+add 1 r
+
+cpy original r
+
+reverse:
+clr src
+add r src
+jmpif 0 r get0
+jmpif 1 r get1
+jmp end
+
+get0:
+add 0 s
+del (src)
+jmp append
+
+get1: 
+add 1 s
+del (src)
+jmp append 
+
+append:
+clr src
+add t src
+jmpif 0 t get0 
+jmpif 1 t get1
+cpy t s
+clr s
+jmp reverse
+
+end:
